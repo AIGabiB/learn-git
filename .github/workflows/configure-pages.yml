@@ -1,0 +1,101 @@
+name: Configure GitHub Pages
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: "Repository to configure (owner/repo)"
+        required: true
+        type: string
+
+      branch:
+        description: "Branch to deploy from"
+        required: true
+        type: string
+        default: "feat/gh-pages"
+
+      path:
+        description: "Publishing path"
+        required: true
+        type: choice
+        options:
+          - /
+          - /docs
+
+jobs:
+  configure-pages:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure GitHub Pages
+        env:
+          GH_TOKEN: ${{ secrets.PAGES_TOKEN }}
+          REPOSITORY: ${{ inputs.repository }}
+          BRANCH: ${{ inputs.branch }}
+          PUBLISH_PATH: ${{ inputs.path }}
+
+        run: |
+          echo "Repository: $REPOSITORY"
+          echo "Branch: $BRANCH"
+          echo "Path: $PUBLISH_PATH"
+          echo ""
+
+          echo "Checking repository access..."
+
+          gh api "/repos/$REPOSITORY" \
+            --jq '{full_name: .full_name, private: .private}'
+
+          echo ""
+          echo "Checking GitHub Pages..."
+
+          if gh api "/repos/$REPOSITORY/pages" > /dev/null 2>&1; then
+
+            echo "GitHub Pages already exists."
+            echo "Updating GitHub Pages..."
+
+            gh api \
+              --method PUT \
+              "/repos/$REPOSITORY/pages" \
+              --input - <<EOF
+          {
+            "build_type": "legacy",
+            "source": {
+              "branch": "$BRANCH",
+              "path": "$PUBLISH_PATH"
+            }
+          }
+          EOF
+
+            echo "GitHub Pages updated successfully."
+
+          else
+
+            echo "GitHub Pages does not exist."
+            echo "Creating GitHub Pages..."
+
+            gh api \
+              --method POST \
+              "/repos/$REPOSITORY/pages" \
+              --input - <<EOF
+          {
+            "build_type": "legacy",
+            "source": {
+              "branch": "$BRANCH",
+              "path": "$PUBLISH_PATH"
+            }
+          }
+          EOF
+
+            echo "GitHub Pages created successfully."
+
+          fi
+
+          echo ""
+          echo "Requesting GitHub Pages build..."
+
+          gh api \
+            --method POST \
+            "/repos/$REPOSITORY/pages/builds"
+
+          echo ""
+          echo "GitHub Pages build requested successfully."
